@@ -97,4 +97,3 @@ jobs:
             echo "TF_VAR_tags=${{ github.event.inputs.tags }}" >> $GITHUB_ENV
           fi
           terraform apply -auto-approve -input=false
-``
