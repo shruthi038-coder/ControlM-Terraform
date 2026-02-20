@@ -1,0 +1,99 @@
+name: Terraform - Azure Resource Group
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+    paths:
+      - '**.tf'
+      - '.github/workflows/terraform.yml'
+  workflow_dispatch:
+    inputs:
+      rg_name:
+        description: "Resource Group name"
+        required: true
+        default: "demo-rg"
+      location:
+        description: "Azure region"
+        required: true
+        default: "westeurope"
+      tags:
+        description: "Tags in HCL format, e.g. {owner=\"shruthi\",env=\"poc\"}"
+        required: false
+        default: "{}"
+
+env:
+  TF_LOG: ERROR
+  TF_IN_AUTOMATION: true
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+
+  fmt_validate_plan:
+    name: fmt / validate / plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform fmt
+        run: terraform fmt -check -diff
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        env:
+          TF_VAR_rg_name: ${{ github.event.inputs.rg_name || 'demo-rg' }}
+          TF_VAR_location: ${{ github.event.inputs.location || 'westeurope' }}
+        run: |
+          if [ -n "${{ github.event.inputs.tags }}" ] && [ "${{ github.event.inputs.tags }}" != "{}" ]; then
+            echo "TF_VAR_tags=${{ github.event.inputs.tags }}" >> $GITHUB_ENV
+          fi
+          terraform plan -no-color -out=tfplan
+
+  apply:
+    name: apply
+    needs: [fmt_validate_plan]
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        env:
+          TF_VAR_rg_name: ${{ github.event.inputs.rg_name || 'demo-rg' }}
+          TF_VAR_location: ${{ github.event.inputs.location || 'westeurope' }}
+        run: |
+          if [ -n "${{ github.event.inputs.tags }}" ] && [ "${{ github.event.inputs.tags }}" != "{}" ]; then
+            echo "TF_VAR_tags=${{ github.event.inputs.tags }}" >> $GITHUB_ENV
+          fi
+          terraform apply -auto-approve -input=false
+``
