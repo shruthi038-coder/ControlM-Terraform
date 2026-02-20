@@ -1,6 +1,7 @@
 name: Terraform - Azure Resource Group
 
 on:
+  
   pull_request:
     branches: [ main ]
   push:
