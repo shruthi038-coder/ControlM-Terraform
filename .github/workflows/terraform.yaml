@@ -1,14 +1,13 @@
 name: Terraform - Azure Resource Group
 
 on:
-  
-  pull_request:
-    branches: [ main ]
   push:
     branches: [ main ]
     paths:
-      - '**.tf'
-      - '.github/workflows/terraform.yml'
+      - "**.tf"
+      - ".github/workflows/terraform.yaml"
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       rg_name:
@@ -18,24 +17,19 @@ on:
       location:
         description: "Azure region"
         required: true
-        default: "westeurope"
+        default: "centralindia"
       tags:
-        description: "Tags in HCL format, e.g. {owner=\"shruthi\",env=\"poc\"}"
+        description: 'Tags (HCL map), e.g. {owner="shruthi",env="poc"}'
         required: false
         default: "{}"
 
 env:
   TF_LOG: ERROR
   TF_IN_AUTOMATION: true
-  
-  TF_VAR_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-  TF_VAR_client_id:       ${{ secrets.ARM_CLIENT_ID }}
-  TF_VAR_client_secret:   ${{ secrets.ARM_CLIENT_SECRET }}
-  TF_VAR_tenant_id:       ${{ secrets.ARM_TENANT_ID }}
-
-  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  # AzureRM provider auto-reads these, so we keep provider {} clean
+  ARM_CLIENT_ID:       ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET:   ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID:       ${{ secrets.ARM_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
 permissions:
@@ -43,8 +37,7 @@ permissions:
   pull-requests: write
 
 jobs:
-
-  fmt_validate_plan:
+  terraform_plan:
     name: fmt / validate / plan
     runs-on: ubuntu-latest
     steps:
@@ -68,24 +61,21 @@ jobs:
       - name: Terraform plan
         id: plan
         env:
-          TF_VAR_rg_name: ${{ github.event.inputs.rg_name || 'demo-rg' }}
-          TF_VAR_location: ${{ github.event.inputs.location || 'westeurope' }}
-          
-          TF_VAR_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          TF_VAR_client_id:       ${{ secrets.ARM_CLIENT_ID }}
-          TF_VAR_client_secret:   ${{ secrets.ARM_CLIENT_SECRET }}
-          TF_VAR_tenant_id:       ${{ secrets.ARM_TENANT_ID }}
-
+          TF_VAR_rg_name:  ${{ github.event.inputs.rg_name || 'demo-rg' }}
+          TF_VAR_location: ${{ github.event.inputs.location || 'centralindia' }}
         run: |
           if [ -n "${{ github.event.inputs.tags }}" ] && [ "${{ github.event.inputs.tags }}" != "{}" ]; then
             echo "TF_VAR_tags=${{ github.event.inputs.tags }}" >> $GITHUB_ENV
           fi
           terraform plan -no-color -out=tfplan
 
-  apply:
-    name: apply
-    needs: [fmt_validate_plan]
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+  terraform_apply:
+    name: apply (manual or push to main)
+    needs: terraform_plan
+    # Only apply when manually triggered OR on push to main
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -102,14 +92,8 @@ jobs:
 
       - name: Terraform apply
         env:
-          TF_VAR_rg_name: ${{ github.event.inputs.rg_name || 'demo-rg' }}
-          TF_VAR_location: ${{ github.event.inputs.location || 'westeurope' }}
-          
-          TF_VAR_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          TF_VAR_client_id:       ${{ secrets.ARM_CLIENT_ID }}
-          TF_VAR_client_secret:   ${{ secrets.ARM_CLIENT_SECRET }}
-          TF_VAR_tenant_id:       ${{ secrets.ARM_TENANT_ID }}
-
+          TF_VAR_rg_name:  ${{ github.event.inputs.rg_name || 'demo-rg' }}
+          TF_VAR_location: ${{ github.event.inputs.location || 'centralindia' }}
         run: |
           if [ -n "${{ github.event.inputs.tags }}" ] && [ "${{ github.event.inputs.tags }}" != "{}" ]; then
             echo "TF_VAR_tags=${{ github.event.inputs.tags }}" >> $GITHUB_ENV
